@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sentence Slider</title>
+<style>
+  :root{
+    --bg:#000;            /* background */
+    --fg:#ff2a2a;         /* text color */
+    --dim:#220000;        /* faint midline */
+    --height:64;          /* pixels (number only) */
+    --speed:80;           /* px per second */
+    --pause:900;          /* ms between sentences */
+    --loop:true;          /* true/false */
+  }
+  /* reset */
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);}
+  /* the bar is exactly the canvas height */
+  #wrap{width:100%; height:calc(var(--height) * 1px); background:var(--bg);}
+  canvas{display:block; width:100%; height:100%;}
+</style>
+</head>
+<body>
+  <div id="wrap"><canvas id="c"></canvas></div>
+
+<script>
+/* --- allow overrides via URL, e.g.
+   ?bg=%23000&fg=%23ff2a2a&height=64&speed=80&pause=900&loop=true
+--- */
+(function applyQueryVars(){
+  const p = new URLSearchParams(location.search);
+  const set = (name, cssVar) => {
+    if (!p.has(name)) return;
+    let v = p.get(name);
+    if (cssVar === '--height') v = String(parseInt(v||'64',10) || 64);
+    document.documentElement.style.setProperty(cssVar, v);
+  };
+  set('bg','--bg'); set('fg','--fg'); set('dim','--dim');
+  set('height','--height'); set('speed','--speed');
+  set('pause','--pause'); set('loop','--loop');
+})();
+
+/* --- sentences (yours) --- */
+const sentences = [
+  "White turnips make it hard to sleep",
+  "her şey bitmeye başlar",
+  "konuştukça söylemediklerimiz artıyor",
+  "şüphesiz ki yaşam onu yaşamaya cüret edenindir",
+  "hiçbir yerin ışıklarını sevmedim",
+  "umutsuzluğa alışmayın",
+  "yatağa küs girmeyin",
+  "bizi bu güzel günler oyalar",
+  "yesterday you said tomorrow",
+  "durgun aklım neye yarar",
+  "I care because you do",
+  "benimle gurur duyardın, artık ben de bir caz severim",
+  "bu sabahların bir anlamı olmalı",
+  "arabanı sür soğuk aralıkta",
+  "yine yazı bekleriz",
+  "gitarı elime o yüzden aldım bu gece",
+  "seni kaybettim sandım",
+  "çok hızlı alışırım hemen şımarırım",
+  "beni hep korkutan sözler değildi bakışlardı",
+  "bıyık kırmızı çizgimdir",
+  "kahvaltıda pankek yemek salak turnusoludur",
+  "ölüm allahın emri ayrılık olmasa",
+  "insanın insana söyleyeceği şeyler tükenmez",
+  "saçma sapan bir rüya gördüm",
+  "çok sıkıcı bir bar akşamındayım",
+  "the future teaches you to be alone",
+  "kimdin?",
+  "come running to me",
+  "seni kırdıysam özür dilerim",
+  "kime neye öfkelisin?",
+  "in the process of learning people you become yourself",
+  "beni öp sonra doğur beni",
+  "bir gece ben yokmuşum da korkmuşun",
+  "geride kaldı rujların tadı günaydın serap nerede uyandın"
+];
+
+/* --- canvas slider (no external deps) --- */
+(() => {
+  const root = getComputedStyle(document.documentElement);
+  const BG    = root.getPropertyValue('--bg').trim()    || '#000';
+  const FG    = root.getPropertyValue('--fg').trim()    || '#ff2a2a';
+  const DIM   = root.getPropertyValue('--dim').trim()   || '#220000';
+  const HCSS  = parseInt(root.getPropertyValue('--height').trim() || '64', 10);
+  const SPEED = + (root.getPropertyValue('--speed').trim() || 80);
+  const PAUSE = + (root.getPropertyValue('--pause').trim() || 900);
+  const LOOP  = (root.getPropertyValue('--loop').trim() || 'true').toLowerCase() !== 'false';
+  const FONT  = `'Courier New', Consolas, Monaco, 'DejaVu Sans Mono', monospace`;
+
+  const wrap = document.getElementById('wrap');
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  let DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  const items = sentences.map(s => ({ text:s, off:null }));
+
+  function resize(){
+    DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const Wcss = wrap.clientWidth, Hcss = HCSS;
+    canvas.width  = Math.max(1, Math.floor(Wcss * DPR));
+    canvas.height = Math.max(1, Math.floor(Hcss * DPR));
+    canvas.style.width = Wcss + 'px';
+    canvas.style.height = Hcss + 'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    items.forEach(it => it.off = prerender(it.text));
+  }
+  addEventListener('resize', resize, {passive:true});
+
+  function prerender(text){
+    const off = document.createElement('canvas');
+    const offCtx = off.getContext('2d');
+    const fontSize = Math.floor(HCSS * 0.68); // avoid ascender clipping
+    const lineH    = Math.floor(HCSS * 0.78);
+    offCtx.font = `${fontSize}px ${FONT}`;
+    offCtx.textBaseline = 'middle';
+    const w = Math.ceil(offCtx.measureText(text).width) + 4;
+    off.width = w; off.height = lineH;
+    offCtx.font = `${fontSize}px ${FONT}`;
+    offCtx.textBaseline = 'middle';
+    offCtx.fillStyle = FG;
+    offCtx.fillText(text, 0, Math.floor(lineH/2));
+    return { canvas: off, width: w, height: lineH };
+  }
+
+  function bg(Wcss,Hcss){
+    ctx.fillStyle = BG;  ctx.fillRect(0,0,Wcss,Hcss);
+    ctx.fillStyle = DIM; ctx.fillRect(0, Math.floor(Hcss/2), Wcss, 1);
+  }
+
+  resize();
+
+  let idx = 0, x = canvas.width / DPR, last = performance.now(), pauseUntil = 0, stopped = false;
+
+  function loop(now){
+    const dt = (now - last)/1000; last = now;
+    const Wcss = canvas.width / DPR, Hcss = canvas.height / DPR;
+    if (stopped) return;
+
+    if (!items[idx].off) items[idx].off = prerender(items[idx].text);
+    const img = items[idx].off.canvas;
+    const imgW = items[idx].off.width;
+    const imgH = items[idx].off.height;
+    const y = Math.floor((Hcss - imgH)/2);
+
+    bg(Wcss,Hcss);
+    ctx.drawImage(img, Math.floor(x), y);
+
+    if (now < pauseUntil) {
+      // hold between sentences
+    } else {
+      x -= SPEED * dt;
+      if (x <= -imgW) {
+        idx += 1;
+        if (idx >= items.length) {
+          if (LOOP) { idx = 0; } else { stopped = true; return; }
+        }
+        x = Wcss; pauseUntil = now + PAUSE;
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
