@@ -6,17 +6,17 @@
 <title>Sentence Slider — LED</title>
 <style>
   :root{
-    /* You can override these via URL: ?dot=7&gap=3&speed=60&glow=true&fg=%23ff2a2a&bg=%23000&pause=900&loop=true */
+    /* You can override via URL: ?dot=8&gap=3&speed=80&pause=900&glow=true&fg=%23ff2a2a&bg=%23000 */
     --bg:#000000;   /* background */
     --fg:#ff2a2a;   /* LED color */
     --dim:#180000;  /* faint midline color */
     --dot:7;        /* dot diameter (px) */
     --gap:3;        /* gap between dots (px) */
-    --rows:5;       /* LED rows (5 for this font) */
+    --rows:5;       /* LED rows in font (5 here) */
     --speed:70;     /* px/sec */
     --pause:900;    /* ms between sentences */
     --loop:true;    /* true/false */
-    --glow:true;    /* true/false (soft halo around LEDs) */
+    --glow:true;    /* true/false halo around LEDs */
   }
   html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);}
   #wrap{width:100%; background:var(--bg);}
@@ -38,7 +38,6 @@
 })();
 
 /* ---------- Minimal 5×5 LED font (uppercase) ---------- */
-/* Feel free to add more glyphs later; unknown chars become spaces */
 const FONT_5x5 = {
   ' ': ["     ","     ","     ","     ","     "],
   'A': ["  X  "," X X ","XXXXX","X   X","X   X"],
@@ -69,18 +68,30 @@ const FONT_5x5 = {
   'Z': ["XXXXX","   X ","  X  "," X   ","XXXXX"],
   '&': [" XX  ","X  X "," XX  ","X  X "," XX X"],
   'Ş': [" XXX ","X    "," XX  ","   X ","XXX  "],   // Turkish Ş
-  // Map punctuation you use to spaces (or design shapes later)
   ',': ["     ","     ","     "," XX  "," XX  "],
   '.': ["     ","     ","     ","     "," XX  "],
-  '?': [" XXX ","    X","  XX ","     ","  X  ],
+  '?': [" XXX ","    X","  XX ","     ","  X  "],
   '!': ["  X  ","  X  ","  X  ","     ","  X  "],
   "'": [" XX  "," XX  ","     ","     ","     "],
   ":": ["     ","  X  ","     ","  X  ","     "]
 };
 
-/* map any char to an available glyph (convert to uppercase) */
-function mapChar(ch){
+/* Normalize special Turkish letters to base glyphs (when missing) */
+function normalizeTurkishUpper(ch){
+  // Uppercase without locale (JS default)
   const up = ch.toUpperCase();
+  // Map letters we don't have glyphs for to base forms:
+  if (up === 'Ç') return 'C';
+  if (up === 'Ö') return 'O';
+  if (up === 'Ü') return 'U';
+  if (up === 'Ğ') return 'G';
+  if (up === 'İ') return 'I';
+  // 'ı' becomes 'I' on toUpperCase anyway; 'ş'→'Ş' which we support.
+  return up;
+}
+
+function mapChar(ch){
+  const up = normalizeTurkishUpper(ch);
   return FONT_5x5[up] || FONT_5x5[' '];
 }
 
@@ -100,7 +111,7 @@ function mapChar(ch){
     sentences = ["(add lines to sentences.txt)"];
   }
 
-  // Shuffle order now; reshuffle per-loop if desired
+  // Shuffle order; reshuffle on each loop if desired
   function shuffle(arr){
     for (let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
     return arr;
@@ -143,11 +154,10 @@ function mapChar(ch){
 
   // Pre-render a sentence into an offscreen LED canvas
   function renderSentenceLED(text){
-    // Build pixel columns for all letters (each 5 cols + 1 gap)
     const glyphWidth = 5, glyphHeight = 5, letterGapCols = 1;
-    const cols = [];  // array of col bitmasks (per row)
+    const cols = [];  // array of columns, each is [rowBits]
     for (const ch of text){
-      const pattern = mapChar(ch);
+      const pattern = mapChar(ch); // 5 strings high
       for (let x=0; x<glyphWidth; x++){
         const col = [];
         for (let y=0; y<glyphHeight; y++){
@@ -156,32 +166,31 @@ function mapChar(ch){
         cols.push(col);
       }
       // inter-letter gap column
-      for (let g=0; g<letterGapCols; g++){
-        cols.push(Array(glyphHeight).fill(0));
-      }
+      cols.push(Array(glyphHeight).fill(0));
     }
     const colsCount = cols.length;
-    const rowsCount = ROWS; // use top 5 rows (font), leave extra rows blank if ROWS>5
 
     const off = document.createElement('canvas');
-    const w = colsCount * (DOT + GAP) - GAP;
+    const w = Math.max(1, colsCount * (DOT + GAP) - GAP);
     const h = Hcss;
     off.width = w; off.height = h;
     const octx = off.getContext('2d');
 
-    // optional glow pass (bigger translucent dots)
+    octx.fillStyle = FG;
+
+    // helper to draw a single LED with optional glow
     function drawDot(ctx, cx, cy){
       if (GLOW){
+        ctx.save();
         ctx.globalAlpha = 0.22;
         ctx.beginPath(); ctx.arc(cx, cy, DOT*0.85, 0, Math.PI*2); ctx.fill();
-        ctx.globalAlpha = 1;
+        ctx.restore();
       }
       ctx.beginPath(); ctx.arc(cx, cy, DOT/2, 0, Math.PI*2); ctx.fill();
     }
 
-    octx.fillStyle = FG;
     for (let c=0; c<colsCount; c++){
-      for (let r=0; r<Math.min(glyphHeight, rowsCount); r++){
+      for (let r=0; r<Math.min(glyphHeight, ROWS); r++){
         if (!cols[c][r]) continue;
         const x = c * (DOT + GAP) + DOT/2;
         const y = r * (DOT + GAP) + DOT/2;
@@ -191,7 +200,7 @@ function mapChar(ch){
     return { canvas: off, width: w, height: h };
   }
 
-  // Pre-render all sentences up front for smooth scrolling
+  // Pre-render all sentences up front
   const items = sentences.map(s => ({ text:s, off: renderSentenceLED(s) }));
 
   // Animation state
@@ -199,7 +208,6 @@ function mapChar(ch){
 
   function drawBG(Wcss, Hcss){
     ctx.fillStyle = BG;  ctx.fillRect(0,0,Wcss,Hcss);
-    // faint midline for “board” vibe
     ctx.fillStyle = DIM; ctx.fillRect(0, Math.floor(Hcss/2), Wcss, 1);
   }
 
@@ -213,11 +221,10 @@ function mapChar(ch){
     const imgW = items[idx].off.width;
 
     drawBG(Wcss, Hcss);
-    // draw sentence bitmap
     ctx.drawImage(img, Math.floor(x), 0);
 
     if (now < pauseUntil) {
-      // holding between sentences
+      // hold
     } else {
       x -= SPEED * dt;
       if (x <= -imgW) {
