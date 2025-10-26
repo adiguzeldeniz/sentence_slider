@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sentence Slider — LED</title>
+<style>
+  :root{
+    /* You can override these via URL: ?dot=7&gap=3&speed=60&glow=true&fg=%23ff2a2a&bg=%23000&pause=900&loop=true */
+    --bg:#000000;   /* background */
+    --fg:#ff2a2a;   /* LED color */
+    --dim:#180000;  /* faint midline color */
+    --dot:7;        /* dot diameter (px) */
+    --gap:3;        /* gap between dots (px) */
+    --rows:5;       /* LED rows (5 for this font) */
+    --speed:70;     /* px/sec */
+    --pause:900;    /* ms between sentences */
+    --loop:true;    /* true/false */
+    --glow:true;    /* true/false (soft halo around LEDs) */
+  }
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);}
+  #wrap{width:100%; background:var(--bg);}
+  canvas{display:block; width:100%; height:100%;}
+</style>
+</head>
+<body>
+  <div id="wrap"><canvas id="c"></canvas></div>
+
+<script>
+/* ---------- Read query overrides ---------- */
+(function applyQueryVars(){
+  const p = new URLSearchParams(location.search);
+  const set = (k, cssVar) => { if(p.has(k)) document.documentElement.style.setProperty(cssVar, p.get(k)); };
+  set('bg','--bg'); set('fg','--fg'); set('dim','--dim');
+  set('dot','--dot'); set('gap','--gap'); set('rows','--rows');
+  set('speed','--speed'); set('pause','--pause');
+  set('loop','--loop'); set('glow','--glow');
+})();
+
+/* ---------- Minimal 5×5 LED font (uppercase) ---------- */
+/* Feel free to add more glyphs later; unknown chars become spaces */
+const FONT_5x5 = {
+  ' ': ["     ","     ","     ","     ","     "],
+  'A': ["  X  "," X X ","XXXXX","X   X","X   X"],
+  'B': ["XXXX ","X   X","XXXX ","X   X","XXXX "],
+  'C': [" XXX ","X   X","X    ","X   X"," XXX "],
+  'D': ["XXXX ","X   X","X   X","X   X","XXXX "],
+  'E': ["XXXXX","X    ","XXX  ","X    ","XXXXX"],
+  'F': ["XXXXX","X    ","XXX  ","X    ","X    "],
+  'G': [" XXX ","X    ","X  XX","X   X"," XXX "],
+  'H': ["X   X","X   X","XXXXX","X   X","X   X"],
+  'I': [" XXX ","  X  ","  X  ","  X  "," XXX "],
+  'J': ["  XXX","   X ","   X ","X  X "," XX  "],
+  'K': ["X   X","X  X ","XXX  ","X  X ","X   X"],
+  'L': ["X    ","X    ","X    ","X    ","XXXXX"],
+  'M': ["X   X","XX XX","X X X","X   X","X   X"],
+  'N': ["X   X","XX  X","X X X","X  XX","X   X"],
+  'O': [" XXX ","X   X","X   X","X   X"," XXX "],
+  'P': ["XXXX ","X   X","XXXX ","X    ","X    "],
+  'Q': [" XXX ","X   X","X   X","X  XX"," XXXX"],
+  'R': ["XXXX ","X   X","XXXX ","X  X ","X   X"],
+  'S': [" XXXX","X    "," XXX ","    X","XXXX "],
+  'T': ["XXXXX","  X  ","  X  ","  X  ","  X  "],
+  'U': ["X   X","X   X","X   X","X   X"," XXX "],
+  'V': ["X   X","X   X","X   X"," X X ","  X  "],
+  'W': ["X   X","X   X","X X X","XX XX","X   X"],
+  'X': ["X   X"," X X ","  X  "," X X ","X   X"],
+  'Y': ["X   X"," X X ","  X  ","  X  ","  X  "],
+  'Z': ["XXXXX","   X ","  X  "," X   ","XXXXX"],
+  '&': [" XX  ","X  X "," XX  ","X  X "," XX X"],
+  'Ş': [" XXX ","X    "," XX  ","   X ","XXX  "],   // Turkish Ş
+  // Map punctuation you use to spaces (or design shapes later)
+  ',': ["     ","     ","     "," XX  "," XX  "],
+  '.': ["     ","     ","     ","     "," XX  "],
+  '?': [" XXX ","    X","  XX ","     ","  X  ],
+  '!': ["  X  ","  X  ","  X  ","     ","  X  "],
+  "'": [" XX  "," XX  ","     ","     ","     "],
+  ":": ["     ","  X  ","     ","  X  ","     "]
+};
+
+/* map any char to an available glyph (convert to uppercase) */
+function mapChar(ch){
+  const up = ch.toUpperCase();
+  return FONT_5x5[up] || FONT_5x5[' '];
+}
+
+/* ---------- Load sentences.txt, shuffle, render LED ---------- */
+(async () => {
+  // Load sentences (with cache-busting)
+  let sentences = [];
+  try {
+    const bust = Date.now();
+    const resp = await fetch('sentences.txt?v='+bust, { cache:'no-store' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const text = await resp.text();
+    sentences = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (!sentences.length) throw new Error('empty file');
+  } catch (e) {
+    console.warn('sentences.txt missing/empty → fallback', e);
+    sentences = ["(add lines to sentences.txt)"];
+  }
+
+  // Shuffle order now; reshuffle per-loop if desired
+  function shuffle(arr){
+    for (let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+    return arr;
+  }
+  shuffle(sentences);
+
+  // CSS params
+  const css = getComputedStyle(document.documentElement);
+  const BG    = css.getPropertyValue('--bg').trim()    || '#000';
+  const FG    = css.getPropertyValue('--fg').trim()    || '#ff2a2a';
+  const DIM   = css.getPropertyValue('--dim').trim()   || '#180000';
+  const DOT   = parseInt(css.getPropertyValue('--dot')  .trim() || '7', 10);
+  const GAP   = parseInt(css.getPropertyValue('--gap')  .trim() || '3', 10);
+  const ROWS  = parseInt(css.getPropertyValue('--rows') .trim() || '5', 10);
+  const SPEED = +(css.getPropertyValue('--speed').trim() || 70);
+  const PAUSE = +(css.getPropertyValue('--pause').trim() || 900);
+  const LOOP  = (css.getPropertyValue('--loop').trim() || 'true').toLowerCase() !== 'false';
+  const GLOW  = (css.getPropertyValue('--glow').trim() || 'true').toLowerCase() !== 'false';
+
+  const wrap = document.getElementById('wrap');
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  // Compute height from DOT/GAP/ROWS
+  const Hcss = ROWS * (DOT + GAP) - GAP; // last row no gap below
+  wrap.style.height = Hcss + 'px';
+
+  let DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  function resize(){
+    DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const Wcss = wrap.clientWidth;
+    canvas.width  = Math.max(1, Math.floor(Wcss * DPR));
+    canvas.height = Math.max(1, Math.floor(Hcss * DPR));
+    canvas.style.width  = Wcss + 'px';
+    canvas.style.height = Hcss + 'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  addEventListener('resize', resize, {passive:true});
+  resize();
+
+  // Pre-render a sentence into an offscreen LED canvas
+  function renderSentenceLED(text){
+    // Build pixel columns for all letters (each 5 cols + 1 gap)
+    const glyphWidth = 5, glyphHeight = 5, letterGapCols = 1;
+    const cols = [];  // array of col bitmasks (per row)
+    for (const ch of text){
+      const pattern = mapChar(ch);
+      for (let x=0; x<glyphWidth; x++){
+        const col = [];
+        for (let y=0; y<glyphHeight; y++){
+          col.push(pattern[y][x] === 'X' ? 1 : 0);
+        }
+        cols.push(col);
+      }
+      // inter-letter gap column
+      for (let g=0; g<letterGapCols; g++){
+        cols.push(Array(glyphHeight).fill(0));
+      }
+    }
+    const colsCount = cols.length;
+    const rowsCount = ROWS; // use top 5 rows (font), leave extra rows blank if ROWS>5
+
+    const off = document.createElement('canvas');
+    const w = colsCount * (DOT + GAP) - GAP;
+    const h = Hcss;
+    off.width = w; off.height = h;
+    const octx = off.getContext('2d');
+
+    // optional glow pass (bigger translucent dots)
+    function drawDot(ctx, cx, cy){
+      if (GLOW){
+        ctx.globalAlpha = 0.22;
+        ctx.beginPath(); ctx.arc(cx, cy, DOT*0.85, 0, Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      ctx.beginPath(); ctx.arc(cx, cy, DOT/2, 0, Math.PI*2); ctx.fill();
+    }
+
+    octx.fillStyle = FG;
+    for (let c=0; c<colsCount; c++){
+      for (let r=0; r<Math.min(glyphHeight, rowsCount); r++){
+        if (!cols[c][r]) continue;
+        const x = c * (DOT + GAP) + DOT/2;
+        const y = r * (DOT + GAP) + DOT/2;
+        drawDot(octx, x, y);
+      }
+    }
+    return { canvas: off, width: w, height: h };
+  }
+
+  // Pre-render all sentences up front for smooth scrolling
+  const items = sentences.map(s => ({ text:s, off: renderSentenceLED(s) }));
+
+  // Animation state
+  let idx = 0, x = canvas.width / DPR, last = performance.now(), pauseUntil = 0, stopped = false;
+
+  function drawBG(Wcss, Hcss){
+    ctx.fillStyle = BG;  ctx.fillRect(0,0,Wcss,Hcss);
+    // faint midline for “board” vibe
+    ctx.fillStyle = DIM; ctx.fillRect(0, Math.floor(Hcss/2), Wcss, 1);
+  }
+
+  function loop(now){
+    const dt = (now - last)/1000; last = now;
+    const Wcss = canvas.width / DPR;
+
+    if (stopped) return;
+
+    const img = items[idx].off.canvas;
+    const imgW = items[idx].off.width;
+
+    drawBG(Wcss, Hcss);
+    // draw sentence bitmap
+    ctx.drawImage(img, Math.floor(x), 0);
+
+    if (now < pauseUntil) {
+      // holding between sentences
+    } else {
+      x -= SPEED * dt;
+      if (x <= -imgW) {
+        idx += 1;
+        if (idx >= items.length) {
+          if (LOOP) {
+            shuffle(items); // new random order each cycle
+            idx = 0;
+          } else {
+            stopped = true; return;
+          }
+        }
+        x = Wcss; pauseUntil = now + PAUSE;
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
