@@ -1,32 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sentence Slider</title>
+<style>
+  :root{
+    --bg:#000;        /* background color */
+    --fg:#ff2a2a;     /* text color */
+    --dim:#220000;    /* faint midline color */
+    --height:64;      /* px (number only) */
+    --speed:80;       /* px/sec */
+    --pause:900;      /* ms between sentences */
+    --loop:true;      /* true/false */
+  }
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);}
+  #wrap{width:100%; height:calc(var(--height) * 1px); background:var(--bg);}
+  canvas{display:block; width:100%; height:100%;}
+</style>
+</head>
+<body>
+  <div id="wrap"><canvas id="c"></canvas></div>
+
 <script>
 (async () => {
-  // --- Load sentences from sentences.txt ---
+  // --- Load sentences.txt from the same directory ---
   let sentences = [];
   try {
-    const resp = await fetch('sentences.txt');
-    if (!resp.ok) throw new Error(resp.statusText);
+    const resp = await fetch('sentences.txt', { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const text = await resp.text();
     sentences = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (!sentences.length) throw new Error('sentences.txt is empty');
   } catch (e) {
     console.error('Could not load sentences.txt:', e);
-    sentences = ["(no sentences.txt found)"];
+    sentences = ["(sentences.txt not found or empty)"];
   }
 
-  // --- Randomize order (Fisher–Yates shuffle) ---
+  // --- Shuffle once (Fisher–Yates) ---
   for (let i = sentences.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [sentences[i], sentences[j]] = [sentences[j], sentences[i]];
   }
 
-  // --- Style and parameters from CSS variables ---
-  const root = getComputedStyle(document.documentElement);
-  const BG    = root.getPropertyValue('--bg').trim()    || '#000';
-  const FG    = root.getPropertyValue('--fg').trim()    || '#ff2a2a';
-  const DIM   = root.getPropertyValue('--dim').trim()   || '#220000';
-  const HCSS  = parseInt(root.getPropertyValue('--height').trim() || '64', 10);
-  const SPEED = + (root.getPropertyValue('--speed').trim() || 80);
-  const PAUSE = + (root.getPropertyValue('--pause').trim() || 900);
-  const LOOP  = (root.getPropertyValue('--loop').trim() || 'true').toLowerCase() !== 'false';
+  // --- Read style vars ---
+  const css = getComputedStyle(document.documentElement);
+  const BG    = css.getPropertyValue('--bg').trim()    || '#000';
+  const FG    = css.getPropertyValue('--fg').trim()    || '#ff2a2a';
+  const DIM   = css.getPropertyValue('--dim').trim()   || '#220000';
+  const HCSS  = parseInt(css.getPropertyValue('--height').trim() || '64', 10);
+  const SPEED = + (css.getPropertyValue('--speed').trim() || 80);
+  const PAUSE = + (css.getPropertyValue('--pause').trim() || 900);
+  const LOOP  = (css.getPropertyValue('--loop').trim() || 'true').toLowerCase() !== 'false';
   const FONT  = `'Courier New', Consolas, Monaco, 'DejaVu Sans Mono', monospace`;
 
   const wrap = document.getElementById('wrap');
@@ -41,17 +66,18 @@
     const Wcss = wrap.clientWidth, Hcss = HCSS;
     canvas.width  = Math.max(1, Math.floor(Wcss * DPR));
     canvas.height = Math.max(1, Math.floor(Hcss * DPR));
-    canvas.style.width = Wcss + 'px';
+    canvas.style.width  = Wcss + 'px';
     canvas.style.height = Hcss + 'px';
     ctx.setTransform(DPR,0,0,DPR,0,0);
-    items.forEach(it => it.off = prerender(it.text));
+    // prerender with current size
+    items.forEach(it => { it.off = prerender(it.text); });
   }
-  addEventListener('resize', resize, {passive:true});
+  addEventListener('resize', resize, { passive:true });
 
   function prerender(text){
     const off = document.createElement('canvas');
     const offCtx = off.getContext('2d');
-    const fontSize = Math.floor(HCSS * 0.68);
+    const fontSize = Math.floor(HCSS * 0.68); // avoids ascender clipping
     const lineH    = Math.floor(HCSS * 0.78);
     offCtx.font = `${fontSize}px ${FONT}`;
     offCtx.textBaseline = 'middle';
@@ -64,49 +90,62 @@
     return { canvas: off, width: w, height: lineH };
   }
 
-  function bg(Wcss,Hcss){
-    ctx.fillStyle = BG;  ctx.fillRect(0,0,Wcss,Hcss);
-    ctx.fillStyle = DIM; ctx.fillRect(0, Math.floor(Hcss/2), Wcss, 1);
+  function drawBG(W,H){
+    ctx.fillStyle = BG;  ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = DIM; ctx.fillRect(0, Math.floor(H/2), W, 1);
+  }
+
+  function drawError(msg){
+    const W = canvas.width / DPR, H = canvas.height / DPR;
+    drawBG(W,H);
+    ctx.fillStyle = FG;
+    ctx.font = `${Math.floor(H * 0.3)}px ${FONT}`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(msg, 8, H/2);
   }
 
   resize();
+
+  if (!items.length) {
+    drawError('No sentences to display');
+    return;
+  }
 
   let idx = 0, x = canvas.width / DPR, last = performance.now(), pauseUntil = 0, stopped = false;
 
   function loop(now){
     const dt = (now - last)/1000; last = now;
-    const Wcss = canvas.width / DPR, Hcss = canvas.height / DPR;
+    const W = canvas.width / DPR, H = canvas.height / DPR;
     if (stopped) return;
 
     if (!items[idx].off) items[idx].off = prerender(items[idx].text);
     const img = items[idx].off.canvas;
     const imgW = items[idx].off.width;
     const imgH = items[idx].off.height;
-    const y = Math.floor((Hcss - imgH)/2);
+    const y = Math.floor((H - imgH)/2);
 
-    bg(Wcss,Hcss);
+    drawBG(W,H);
     ctx.drawImage(img, Math.floor(x), y);
 
     if (now < pauseUntil) {
-      // waiting between sentences
+      // hold
     } else {
       x -= SPEED * dt;
       if (x <= -imgW) {
         idx += 1;
         if (idx >= items.length) {
           if (LOOP) {
-            // reshuffle for new random order on each full cycle
+            // reshuffle each cycle
             for (let i = items.length - 1; i > 0; i--) {
               const j = Math.floor(Math.random() * (i + 1));
               [items[i], items[j]] = [items[j], items[i]];
             }
             idx = 0;
           } else {
-            stopped = true;
-            return;
+            stopped = true; return;
           }
         }
-        x = Wcss; pauseUntil = now + PAUSE;
+        x = W; pauseUntil = now + PAUSE;
       }
     }
     requestAnimationFrame(loop);
@@ -114,3 +153,5 @@
   requestAnimationFrame(loop);
 })();
 </script>
+</body>
+</html>
