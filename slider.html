@@ -1,6 +1,6 @@
 <script>
 (async () => {
-  // fetch sentences.txt from the same directory
+  // --- Load sentences from sentences.txt ---
   let sentences = [];
   try {
     const resp = await fetch('sentences.txt');
@@ -9,10 +9,16 @@
     sentences = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   } catch (e) {
     console.error('Could not load sentences.txt:', e);
-    // fallback default list
     sentences = ["(no sentences.txt found)"];
   }
 
+  // --- Randomize order (Fisher–Yates shuffle) ---
+  for (let i = sentences.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [sentences[i], sentences[j]] = [sentences[j], sentences[i]];
+  }
+
+  // --- Style and parameters from CSS variables ---
   const root = getComputedStyle(document.documentElement);
   const BG    = root.getPropertyValue('--bg').trim()    || '#000';
   const FG    = root.getPropertyValue('--fg').trim()    || '#ff2a2a';
@@ -82,13 +88,23 @@
     ctx.drawImage(img, Math.floor(x), y);
 
     if (now < pauseUntil) {
-      // waiting
+      // waiting between sentences
     } else {
       x -= SPEED * dt;
       if (x <= -imgW) {
         idx += 1;
         if (idx >= items.length) {
-          if (LOOP) { idx = 0; } else { stopped = true; return; }
+          if (LOOP) {
+            // reshuffle for new random order on each full cycle
+            for (let i = items.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [items[i], items[j]] = [items[j], items[i]];
+            }
+            idx = 0;
+          } else {
+            stopped = true;
+            return;
+          }
         }
         x = Wcss; pauseUntil = now + PAUSE;
       }
