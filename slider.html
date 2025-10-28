@@ -9,32 +9,32 @@
     --bg:#000;
     --fg:#ff2a2a;
     --dim:transparent;
-    --height:120;        /* ← height of the slider bar (in px) */
+    --height:120;        /* slider bar height in px */
     --speed:80;
     --pause:900;
     --loop:true;
 
-    --font-scale:1.8;     /* ← make text much larger (1.0 = normal) */
+    --font-scale:1.8;     /* text size multiplier */
     --hero-max-h: 60vh;
     --hero-min-h: 160px;
-    --gap-after-hero: 20px;
   }
 
   html,body{
     margin:0;
     padding:0;
+    height:100%;
     background:var(--bg);
     color:var(--fg);
+    overflow-x:hidden; /* prevent scrollbars from long text */
   }
 
-  /* ======= Hero GIF at the top (keeps aspect ratio) ======= */
+  /* ======= Hero GIF (top section) ======= */
   header.hero{
     width:100%;
     text-align:center;
     background:var(--bg);
     overflow:hidden;
     padding:0;
-    margin-bottom:var(--gap-after-hero);
   }
   header.hero img{
     height:auto;
@@ -45,11 +45,15 @@
     display:block;
   }
 
-  /* ======= Slider row ======= */
+  /* ======= Slider fixed to bottom ======= */
   #wrap{
+    position:fixed;      /* stick to bottom */
+    bottom:0;
+    left:0;
     width:100%;
     height:calc(var(--height) * 1px);
     background:var(--bg);
+    z-index:10;          /* keep on top of everything */
   }
   canvas{
     display:block;
@@ -65,7 +69,7 @@
     <img src="coupleonbeach.gif" alt="Animated header" loading="lazy" />
   </header>
 
-  <!-- SLIDER BELOW -->
+  <!-- SLIDER FIXED BELOW -->
   <div id="wrap"><canvas id="c"></canvas></div>
 
 <script>
@@ -121,7 +125,7 @@
   function prerender(text){
     const off = document.createElement('canvas');
     const offCtx = off.getContext('2d');
-    const fontSize = Math.floor(HCSS * 0.68 * FONT_SCALE); // larger font
+    const fontSize = Math.floor(HCSS * 0.68 * FONT_SCALE);
     const lineH    = Math.floor(HCSS * 0.78 * FONT_SCALE);
     offCtx.font = `${fontSize}px ${FONT}`;
     offCtx.textBaseline = 'middle';
