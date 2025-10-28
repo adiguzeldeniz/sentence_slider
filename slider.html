@@ -14,9 +14,9 @@
     --pause:900;
     --loop:true;
 
-    /* You can adjust this if you want a taller or shorter GIF area */
     --hero-max-h: 60vh;
     --hero-min-h: 160px;
+    --gap-after-hero: 20px;  /* ← space between GIF and slider */
   }
 
   html,body{
@@ -26,20 +26,21 @@
     color:var(--fg);
   }
 
-  /* ======= Hero GIF at the top (keep original aspect ratio) ======= */
+  /* ======= Hero GIF at the top (keep aspect ratio) ======= */
   header.hero{
     width:100%;
-    text-align:center;      /* centers the image horizontally */
+    text-align:center;
     background:var(--bg);
     overflow:hidden;
     padding:0;
+    margin-bottom:var(--gap-after-hero); /* ← here’s the spacing */
   }
   header.hero img{
-    height:auto;            /* maintain aspect ratio */
-    width:auto;             /* natural width */
-    max-width:100%;         /* shrink only if too wide for screen */
+    height:auto;
+    width:auto;
+    max-width:100%;
     max-height:var(--hero-max-h);
-    margin:0 auto;          /* center the image */
+    margin:0 auto;
     display:block;
   }
 
