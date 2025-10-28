@@ -9,14 +9,15 @@
     --bg:#000;
     --fg:#ff2a2a;
     --dim:transparent;
-    --height:64;
+    --height:120;        /* ← height of the slider bar (in px) */
     --speed:80;
     --pause:900;
     --loop:true;
 
+    --font-scale:1.8;     /* ← make text much larger (1.0 = normal) */
     --hero-max-h: 60vh;
     --hero-min-h: 160px;
-    --gap-after-hero: 20px;  /* ← space between GIF and slider */
+    --gap-after-hero: 20px;
   }
 
   html,body{
@@ -26,14 +27,14 @@
     color:var(--fg);
   }
 
-  /* ======= Hero GIF at the top (keep aspect ratio) ======= */
+  /* ======= Hero GIF at the top (keeps aspect ratio) ======= */
   header.hero{
     width:100%;
     text-align:center;
     background:var(--bg);
     overflow:hidden;
     padding:0;
-    margin-bottom:var(--gap-after-hero); /* ← here’s the spacing */
+    margin-bottom:var(--gap-after-hero);
   }
   header.hero img{
     height:auto;
@@ -91,10 +92,11 @@
   const BG    = css.getPropertyValue('--bg').trim()    || '#000';
   const FG    = css.getPropertyValue('--fg').trim()    || '#ff2a2a';
   const DIM   = css.getPropertyValue('--dim').trim()   || '#220000';
-  const HCSS  = parseInt(css.getPropertyValue('--height').trim() || '64', 10);
+  const HCSS  = parseInt(css.getPropertyValue('--height').trim() || '120', 10);
   const SPEED = + (css.getPropertyValue('--speed').trim() || 80);
   const PAUSE = + (css.getPropertyValue('--pause').trim() || 900);
   const LOOP  = (css.getPropertyValue('--loop').trim() || 'true').toLowerCase() !== 'false';
+  const FONT_SCALE = + (css.getPropertyValue('--font-scale').trim() || 1);
   const FONT  = `'Courier New', Consolas, Monaco, 'DejaVu Sans Mono', monospace`;
 
   const wrap = document.getElementById('wrap');
@@ -119,8 +121,8 @@
   function prerender(text){
     const off = document.createElement('canvas');
     const offCtx = off.getContext('2d');
-    const fontSize = Math.floor(HCSS * 0.68);
-    const lineH    = Math.floor(HCSS * 0.78);
+    const fontSize = Math.floor(HCSS * 0.68 * FONT_SCALE); // larger font
+    const lineH    = Math.floor(HCSS * 0.78 * FONT_SCALE);
     offCtx.font = `${fontSize}px ${FONT}`;
     offCtx.textBaseline = 'middle';
     const w = Math.ceil(offCtx.measureText(text).width) + 4;
