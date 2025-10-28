@@ -14,9 +14,10 @@
     --pause:900;
     --loop:true;
 
-    --font-scale:3.0;     /* text size multiplier */
+    --font-scale:3.5;     /* text size multiplier */
     --hero-max-h: 60vh;
     --hero-min-h: 160px;
+    --bottom-gap:30px;    /* ← space above bottom edge */
   }
 
   html,body{
@@ -25,7 +26,7 @@
     height:100%;
     background:var(--bg);
     color:var(--fg);
-    overflow-x:hidden; /* prevent scrollbars from long text */
+    overflow-x:hidden;
   }
 
   /* ======= Hero GIF (top section) ======= */
@@ -45,15 +46,15 @@
     display:block;
   }
 
-  /* ======= Slider fixed to bottom ======= */
+  /* ======= Slider fixed slightly above bottom ======= */
   #wrap{
-    position:fixed;      /* stick to bottom */
-    bottom:0;
+    position:fixed;
+    bottom:var(--bottom-gap);
     left:0;
     width:100%;
     height:calc(var(--height) * 1px);
     background:var(--bg);
-    z-index:10;          /* keep on top of everything */
+    z-index:10;
   }
   canvas{
     display:block;
