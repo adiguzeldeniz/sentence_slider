@@ -6,20 +6,19 @@
 <title>Sentence Slider</title>
 <style>
   :root{
-    --bg:#000;        /* background color */
-    --fg:#ff2a2a;     /* text color */
-    --dim:transparent;/* faint midline color → now invisible */
-    --height:64;      /* px (number only) for the slider bar */
-    --speed:80;       /* px/sec */
-    --pause:900;      /* ms between sentences */
-    --loop:true;      /* true/false */
+    --bg:#000;
+    --fg:#ff2a2a;
+    --dim:transparent;
+    --height:64;
+    --speed:80;
+    --pause:900;
+    --loop:true;
 
-    /* Hero (GIF) sizing — tweak as you like */
-    --hero-max-h: 40vh;   /* cap height relative to viewport */
-    --hero-min-h: 160px;  /* ensure it’s never too tiny */
+    /* You can adjust this if you want a taller or shorter GIF area */
+    --hero-max-h: 60vh;
+    --hero-min-h: 160px;
   }
 
-  /* Page base */
   html,body{
     margin:0;
     padding:0;
@@ -27,17 +26,21 @@
     color:var(--fg);
   }
 
-  /* ======= Hero GIF at the top ======= */
+  /* ======= Hero GIF at the top (keep original aspect ratio) ======= */
   header.hero{
     width:100%;
-    overflow:hidden;
+    text-align:center;      /* centers the image horizontally */
     background:var(--bg);
+    overflow:hidden;
+    padding:0;
   }
   header.hero img{
-    display:block;
-    width:100%;
-    height:auto;
+    height:auto;            /* maintain aspect ratio */
+    width:auto;             /* natural width */
+    max-width:100%;         /* shrink only if too wide for screen */
     max-height:var(--hero-max-h);
+    margin:0 auto;          /* center the image */
+    display:block;
   }
 
   /* ======= Slider row ======= */
@@ -65,7 +68,6 @@
 
 <script>
 (async () => {
-  // --- Load sentences.txt from the same directory ---
   let sentences = [];
   try {
     const resp = await fetch('sentences.txt', { cache: 'no-store' });
@@ -78,13 +80,12 @@
     sentences = ["(sentences.txt not found or empty)"];
   }
 
-  // --- Shuffle once (Fisher–Yates) ---
+  // Shuffle once
   for (let i = sentences.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [sentences[i], sentences[j]] = [sentences[j], sentences[i]];
   }
 
-  // --- Read style vars ---
   const css = getComputedStyle(document.documentElement);
   const BG    = css.getPropertyValue('--bg').trim()    || '#000';
   const FG    = css.getPropertyValue('--fg').trim()    || '#ff2a2a';
@@ -110,7 +111,6 @@
     canvas.style.width  = Wcss + 'px';
     canvas.style.height = Hcss + 'px';
     ctx.setTransform(DPR,0,0,DPR,0,0);
-    // prerender with current size
     items.forEach(it => { it.off = prerender(it.text); });
   }
   addEventListener('resize', resize, { passive:true });
@@ -118,7 +118,7 @@
   function prerender(text){
     const off = document.createElement('canvas');
     const offCtx = off.getContext('2d');
-    const fontSize = Math.floor(HCSS * 0.68); // avoids ascender clipping
+    const fontSize = Math.floor(HCSS * 0.68);
     const lineH    = Math.floor(HCSS * 0.78);
     offCtx.font = `${fontSize}px ${FONT}`;
     offCtx.textBaseline = 'middle';
@@ -176,7 +176,6 @@
         idx += 1;
         if (idx >= items.length) {
           if (LOOP) {
-            // reshuffle each cycle
             for (let i = items.length - 1; i > 0; i--) {
               const j = Math.floor(Math.random() * (i + 1));
               [items[i], items[j]] = [items[j], items[i]];
